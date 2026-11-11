@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Giám Sát Bể Thủy Sản</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+    body { background-color: #ffffff; color: #333; margin: 0; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; }
+    
+    h1 { color: #111; margin-bottom: 30px; font-weight: 600; }
+    .status { padding: 10px 20px; margin-bottom: 30px; border-radius: 6px; font-size: 14px; font-weight: bold; transition: all 0.3s ease; }
+    
+    .data-container { display: flex; gap: 40px; margin-bottom: 40px; }
+    .data-box { border: 1px solid #e5e7eb; padding: 30px 40px; border-radius: 12px; text-align: center; width: 240px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .data-box h3 { margin: 0 0 15px 0; color: #6b7280; font-size: 15px; font-weight: 600; }
+    
+    .water-value { font-size: 42px; font-weight: bold; color: #0284c7; }
+    .temp-value { font-size: 42px; font-weight: bold; color: #e11d48; }
+    
+    .control-container { border: 1px solid #e5e7eb; padding: 30px; border-radius: 12px; text-align: center; width: 100%; max-width: 520px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .control-container h3 { margin-top: 0; color: #374151; font-size: 16px; }
+    .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
+    
+    button { padding: 12px 20px; font-size: 14px; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; transition: 0.2s; color: #fff; }
+    .btn-pump { background-color: #0284c7; }
+    .btn-valve { background-color: #e11d48; }
+    .btn-off { background-color: #4b5563; }
+    button:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+
+  <h1>Hệ Thống Giám Sát Bể Nuôi</h1>
+  <div id="status" class="status" style="background: #f3f4f6; color: #4b5563;">Đang kết nối MQTT...</div>
+
+  <div class="data-container">
+    <div class="data-box">
+      <h3>MỰC NƯỚC</h3>
+      <div class="water-value">-- m</div>
+    </div>
+    <div class="data-box">
+      <h3>NHIỆT ĐỘ</h3>
+      <div class="temp-value">-- °C</div>
+    </div>
+  </div>
+
+  <div class="control-container">
+    <h3>Điều khiển thủ công (Manual)</h3>
+    <div class="btn-group">
+      <button class="btn-pump" onclick="sendCmd('pump', 'ON_50')">Bơm (50%)</button>
+      <button class="btn-pump" onclick="sendCmd('pump', 'ON_100')">Bơm (100%)</button>
+      <button class="btn-off" onclick="sendCmd('pump', 'OFF')">Tắt Bơm</button>
+    </div>
+    <div class="btn-group">
+      <button class="btn-valve" onclick="sendCmd('valve', 'ON')">Mở Van Thoát</button>
+      <button class="btn-off" onclick="sendCmd('valve', 'OFF')">Đóng Van Thoát</button>
+    </div>
+  </div>
+
+<script>
+  // Sử dụng đúng cổng 8884 cho giao thức wss:// của HiveMQ
+  const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
+  const client = mqtt.connect(brokerUrl);
+  
+  const statusEl = document.getElementById('status');
+  const waterEl = document.querySelector('.water-value');
+  const tempEl = document.querySelector('.temp-value');
+
+  client.on('connect', () => {
+    statusEl.textContent = 'Đã kết nối thành công với MQTT Broker!';
+    statusEl.style.background = '#dcfce7';
+    statusEl.style.color = '#15803d';
+    client.subscribe('aquaculture/sensors/data');
+  });
+
+  client.on('error', (err) => {
+    console.error('Lỗi kết nối MQTT:', err);
+    statusEl.textContent = 'Lỗi kết nối MQTT Broker!';
+    statusEl.style.background = '#fee2e2';
+    statusEl.style.color = '#b91c1c';
+  });
+
+  client.on('message', (topic, payload) => {
+    if (topic === 'aquaculture/sensors/data') {
+      try {
+        const data = JSON.parse(payload.toString());
+        waterEl.textContent = data.water_level.toFixed(2) + ' m';
+        tempEl.textContent = data.temperature.toFixed(1) + ' °C';
+      } catch (e) { 
+        console.error('Lỗi định dạng JSON:', e); 
+      }
+    }
+  });
+
+  function sendCmd(device, state) {
+    if (device === 'pump') client.publish('aquaculture/control/pump', state);
+    if (device === 'valve') client.publish('aquaculture/control/valve', state);
+  }
+</script>
+</body>
+</html>
